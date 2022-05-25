@@ -1,14 +1,15 @@
 using Plots, LinearAlgebra, ForwardDiff, Random
 
 """ Move a point along the countour, ⟂ to gradient """
-function move_along_contour(x,f,Ns=10)
+function move_along_contour(x,f,maxNs=10)
     xrand = rand(length(x))
     xnew = x
-    for i ∈ 1:Ns
-    ∇f = ForwardDiff.gradient(f,xnew) # Uphill direction
-    xrand = xrand - xrand⋅∇f*∇f/(∇f⋅∇f) # Find a direction ⟂ ∇f
-    xrand = xrand/norm(xrand)/norm(∇f)/10 # Scale the length by steepness
-    xnew = xnew+xrand
+    minNs = 5
+    for i ∈ minNs:max(minNs,maxNs)
+        ∇f = ForwardDiff.gradient(f,xnew) # Uphill direction
+        xrand = xrand - xrand⋅∇f*∇f/(∇f⋅∇f) # Find a direction ⟂ ∇f
+        xrand = xrand/norm(xrand)/norm(∇f)/10 # Scale the length by steepness
+        xnew = xnew+xrand
     end
     return xnew
 end
@@ -39,9 +40,11 @@ Nw = 2
 w = rand(Nw,2)
 scatter!(w[:,1],w[:,2],msw=3,ms=3,mc=:cyan)
 nS = 10
-xnew = zeros(nS,2)
-xnew[1,:] = move_along_contour(w[1,:],f)
+x = move_along_contour(w[1,:],f)
 e = f(w[1,:])
+xnew = move_along_contour(x,f)
+x2 = restore_height(e,xnew,f)
+
 #plot!([w[1,1]-xnew[1],w[1,1]+xnew[1]],[w[1,2]-xnew[2],w[1,2]+xnew[2]],lc=:cyan,lw=3)
 # Make a plot of the gradient descent paths. Show that the usually end in the shallow basin.
 # Also show what moving along the contour will do.

@@ -1,17 +1,32 @@
 using Plots, LinearAlgebra, ForwardDiff, Random
 
-function move_along_contour(x,f)
+""" Move a point along the countour, ⟂ to gradient """
+function move_along_contour(x,f,Ns=10)
     xrand = rand(length(x))
-    ∇f = ForwardDiff.gradient(f,x) # Uphill direction
+    xnew = x
+    for i ∈ 1:Ns
+    ∇f = ForwardDiff.gradient(f,xnew) # Uphill direction
     xrand = xrand - xrand⋅∇f*∇f/(∇f⋅∇f) # Find a direction ⟂ ∇f
     xrand = xrand/norm(xrand)/norm(∇f)/10 # Scale the length by steepness
-    return xrand
+    xnew = xnew+xrand
+    end
+    return xnew
 end
-x1 = [ 0.03603987006772491, 0.20167519711419302]
+
+""" Move x along gradient to height `e` """
+function restore_height(e,x,f)
+    ∇f = ForwardDiff.gradient(f,x)
+    for i ∈ 1:10
+        x = x + ∇f*(e-f(x))/norm(∇f)*0.1    
+    end
+    return x
+end
+x1 = [ 0.036, 0.201]
 f(x) = -0.5*prod(sin.(π*x))-exp(-50*sum((x.-x1).^2))
 
 xp = 0:.01:1 
 yp = 0:.01:1
+
 contour(xp,yp,(x,y)->f([x,y]),size=(1000,1000)
 ,fill=true,legend=false, axis=nothing)
 Nw = 2
@@ -23,6 +38,7 @@ xnew[1,:] = w[1,:]
 for i ∈ 2:10
     xnew[i,:] = xnew[i-1,:]+move_along_contour(xnew[i-1,:],f)
 end
+e = f(w[1,:])
 #plot!([w[1,1]-xnew[1],w[1,1]+xnew[1]],[w[1,2]-xnew[2],w[1,2]+xnew[2]],lc=:cyan,lw=3)
 # Make a plot of the gradient descent paths. Show that the usually end in the shallow basin.
 # Also show what moving along the contour will do.
@@ -32,4 +48,6 @@ scatter!(xnew[:,1],xnew[:,2],msw=0,ms=10,mc=:red)
 #survivors=sortperm([f(w[i,:]) for i in 1:Nw])[1:convert(Int,Nw/2)]
 # clones=w[survivors,:]
 # scatter!(clones[:,1],clones[:,2],msw=3,ms=6,mc=:yellow)
+
+
 

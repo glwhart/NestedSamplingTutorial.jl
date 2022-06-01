@@ -1,36 +1,48 @@
 using Plots, LinearAlgebra, ForwardDiff, Random
 
 """ Move a point along the countour, ⟂ to gradient """
-function move_along_contour(x,f,maxNs=10)
+function move_along_contour(x,f,maxNs=15)
     xrand = rand(length(x))
     xnew = x
     minNs = 5
-    for i ∈ minNs:max(minNs,maxNs)
+    for i ∈ minNs:rand(minNs:max(minNs,maxNs))
         ∇f = ForwardDiff.gradient(f,xnew) # Uphill direction
-        xrand = xrand - xrand⋅∇f*∇f/(∇f⋅∇f) # Find a direction ⟂ ∇f
-        xrand = xrand/norm(xrand)/norm(∇f)/10 # Scale the length by steepness
+        nf = max(norm(∇f),.2) # keep |∇f| big near minima (avoid big steps) 
+        xrand = xrand - xrand⋅∇f*∇f/nf^2 # Find a direction ⟂ ∇f
+        xrand = xrand/norm(xrand)/nf/10 # Scale the length by steepness
         xnew = xnew+xrand
     end
+    bounce_back_to_unit_square(xnew)
     return xnew
+end
+
+""" If a point is outside the unit square, reflect it back """
+function bounce_back_to_unit_square(p)
+# Bounce back into unit square if necessary.
+   p[1] > 1.0 ? p[1] = mod(p[1],1) : true 
+   p[1] < 0.0 ? p[1] = 1-mod(p[1],1) : true
+   p[2] > 1.0 ? p[2] = mod(p[2],1) : true 
+   p[2] < 0.0 ? p[2] = 1-mod(p[2],1) : true
 end
 
 """ Move x along gradient to height `e` """
 function restore_height(e,x,f)
     ∇f = ForwardDiff.gradient(f,x)
-    for i ∈ 1:10
-        x = x + ∇f*(e-f(x))/norm(∇f)*0.1    
+    for i ∈ 1:5
+        x = x + ∇f*(e-f(x))/norm(∇f) 
     end
+    bounce_back_to_unit_square(x)
     return x
 end
 
 """ Move walker downhill very slightly """
 function step_downhill(x,f)
     ∇f = ForwardDiff.gradient(f,x)
-    return x -= ∇f/norm(∇f)/100       
+    return x -= ∇f/norm(∇f)*.01       
 end
-x1 = [ 0.036, 0.201]
-f(x) = -0.5*prod(sin.(π*x))-exp(-50*sum((x.-x1).^2))
 
+x1 = [0.3, 0.201]
+f(x) = -0.5*(sin(π*x[1])*sin(π*x[2]))-exp(-100*((x[1]-x1[1])^2+(x[2]-x1[2])^2))
 xp = 0:.01:1 
 yp = 0:.01:1
 
@@ -45,15 +57,45 @@ e = f(w[1,:])
 xnew = move_along_contour(x,f)
 x2 = restore_height(e,xnew,f)
 
-#plot!([w[1,1]-xnew[1],w[1,1]+xnew[1]],[w[1,2]-xnew[2],w[1,2]+xnew[2]],lc=:cyan,lw=3)
-# Make a plot of the gradient descent paths. Show that the usually end in the shallow basin.
-# Also show what moving along the contour will do.
-# Ask Gabor's group about phase space volume in a typical case...
-#[w[i,:]+=move_along_contour(w[i,:],f) for i in 1:Nw]
-#scatter!(xnew[:,1],xnew[:,2],msw=0,ms=10,mc=:red)
-#survivors=sortperm([f(w[i,:]) for i in 1:Nw])[1:convert(Int,Nw/2)]
-# clones=w[survivors,:]
-# scatter!(clones[:,1],clones[:,2],msw=3,ms=6,mc=:yellow)
+begin
+x2=rand(2)
+@gif for i ∈ 1:10
+    global x2
+    #println("1: ",f(x2)," ",x2)
+    contour(xp,yp,(x,y)->f([x,y]),size=(1000,1000)
+,fill=true,legend=false, axis=nothing)
+    scatter!([x2[1]],[x2[2]],xrange=(0,1),yrange=(0,1),aspect_ratio=1,legend=:false)
+    e = f(x2)
+    #println(x)
+    x = move_along_contour(x2,f)
+    #println("2: ",f(x)," ",x)
+    x2 = restore_height(e,x,f)
+    #println("3: ",f(x)," ",x)
+end
+end
 
-
-
+anim = Animation()
+Nw = 20 # Number of walkers
+Ns = Int(Nw/2) # Number of survivors
+contour(xp,yp,(x,y)->f([x,y]),size=(1000,1000)
+,fill=true,legend=false, axis=nothing)
+w = rand(Nw,2)
+scatter!(w[:,1],w[:,2],msw=2,ms=8,mc=:cyan)
+e = [f(i) for i ∈ eachrow(w)]
+w = w[sortperm(e),:]
+scatter!(w[Ns+1:Nw,1],w[Ns+1:Nw,2],msw=2,ms=8,mc=:red)
+for i ∈ 1:Ns
+    h = f(w[i,:])
+    w[i+Ns,:] = move_along_contour(w[i,:],f)
+    w[i+Ns,:] = restore_height(h,w[i+Ns,:],f)
+end
+scatter!(w[Ns+1:Nw,1],w[Ns+1:Nw,2],msw=2,ms=8,mc=:green)
+contour(xp,yp,(x,y)->f([x,y]),size=(1000,1000)
+,fill=true,legend=false, axis=nothing)
+scatter!(w[:,1],w[:,2],msw=2,ms=8,mc=:cyan)
+scatter!(w[Int(Nw/2)+1:Nw,1],w[Int(Nw/2)+1:Nw,2],msw=2,ms=8,mc=:green)
+scatter!(w[:,1],w[:,2],msw=2,ms=8,mc=:cyan)
+for i ∈ 1:Nw
+    w[i,:] = step_downhill(w[i,:],f)
+end
+scatter!(w[:,1],w[:,2],msw=2,ms=8,mc=:green)
